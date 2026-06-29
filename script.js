@@ -1,6 +1,6 @@
 const APP_CONFIG = {
-  passcode: "band1234",
-  adminPasscode: "admin1234",
+  passcode: "narutan",
+  adminPasscode: "admin",
   activeMemberStorageKey: "renshuubi-kimeru-kun-active-member-v2",
   pinPattern: /^\d{6}$/,
   timeSlots: ["18:00〜20:00", "19:00〜21:00", "20:00〜22:00", "21:00〜23:00"],
