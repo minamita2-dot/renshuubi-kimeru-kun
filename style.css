@@ -55,19 +55,96 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
-.passcode-screen {
+.passcode-screen,
+.role-screen {
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 24px;
 }
 
-.login-panel {
+.login-panel,
+.role-panel {
   width: min(460px, 100%);
   padding: 34px;
   border: 3px solid var(--ink);
   background: var(--panel);
   box-shadow: 9px 9px 0 var(--ink);
+}
+
+.role-panel {
+  width: min(640px, 100%);
+}
+
+.admin-login-form,
+.member-pin-form,
+.role-member-section {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-login-form,
+.role-member-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 2px solid var(--ink);
+}
+
+.admin-login-form h2,
+.role-member-section h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.admin-login-form input,
+.member-pin-form input {
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  font-size: 1rem;
+}
+
+.admin-login-form button,
+.member-pin-form button,
+.role-member-button {
+  padding: 0 18px;
+  font-weight: 800;
+}
+
+.role-member-list {
+  display: grid;
+  gap: 8px;
+}
+
+.role-member-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  color: var(--ink);
+  background: #fff;
+  border: 2px solid var(--ink);
+  text-align: left;
+}
+
+.member-pin-form {
+  margin-top: 6px;
+  padding: 12px;
+  border: 2px solid var(--ink);
+  background: #fff9d7;
+}
+
+.pin-member-name {
+  margin: 0;
+  font-weight: 900;
+}
+
+.pin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .logo-mark {
@@ -124,7 +201,9 @@ h1 {
 }
 
 .passcode-form input,
-.member-form input[type="text"] {
+.member-form input[type="text"],
+.pin-reset-form input,
+.pin-change-form input {
   width: 100%;
   min-height: 50px;
   padding: 12px 14px;
@@ -309,6 +388,37 @@ input:disabled {
   overflow-wrap: anywhere;
 }
 
+.active-member-badge.is-admin-mode {
+  color: #111;
+  background: #ffcf33;
+}
+
+.active-member-badge.is-member-mode {
+  color: #fff;
+  background: #2e6b3f;
+}
+
+.mode-help {
+  margin: 10px 0 0;
+  color: #444;
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.mode-help-primary,
+.mode-help-note {
+  display: block;
+}
+
+.mode-help-note {
+  margin-top: 2px;
+  color: #666;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .member-notice {
   margin: 12px 0 0;
   padding: 10px 12px;
@@ -320,7 +430,7 @@ input:disabled {
 }
 
 .member-form {
-  grid-template-columns: 1fr 64px 86px;
+  grid-template-columns: 1fr 64px minmax(80px, 110px) 86px;
   align-items: end;
   margin-top: 14px;
 }
@@ -335,6 +445,11 @@ input:disabled {
   padding: 4px;
   border: 2px solid var(--ink);
   background: #fff;
+}
+
+.member-form input[type="text"]#memberPinAdminInput {
+  min-height: 50px;
+  padding: 12px 10px;
 }
 
 .member-list {
@@ -392,6 +507,59 @@ input:disabled {
   color: var(--ink);
   background: #fff;
   font-weight: 900;
+}
+
+.member-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reset-pin-button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  background: #fff9d7;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.member-self-tools,
+.pin-reset-form,
+.pin-change-form {
+  display: grid;
+  gap: 10px;
+}
+
+.member-self-tools,
+.pin-reset-form {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--line);
+}
+
+.pin-reset-form,
+.pin-change-form {
+  padding: 12px;
+  border: 2px solid var(--ink);
+  background: #fafafa;
+}
+
+.pin-reset-form label,
+.pin-change-form label {
+  font-weight: 800;
+}
+
+.subtle-button {
+  justify-self: start;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 2px solid #cfcfca;
+  color: #444;
+  background: #fff;
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 .empty-state {
@@ -710,6 +878,7 @@ input:disabled {
     grid-template-columns: 1fr 64px;
   }
 
+  .member-form input#memberPinAdminInput,
   .member-form button {
     grid-column: 1 / -1;
   }
@@ -724,6 +893,16 @@ input:disabled {
   }
 
   .copy-button {
+    width: 100%;
+  }
+
+  .member-admin-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reset-pin-button,
+  .delete-member {
     width: 100%;
   }
 
@@ -779,8 +958,10 @@ input:disabled {
     font-size: 0.95rem;
   }
 
-  .login-panel {
+  .login-panel,
+  .role-panel {
     padding: 26px;
     box-shadow: 6px 6px 0 var(--ink);
   }
-}
+
+  .

@@ -14,20 +14,51 @@
       </div>
       <p class="kicker">BAND PRACTICE SCHEDULER</p>
       <h1 id="loginTitle">練習日きめるくん</h1>
-      <p class="login-copy">合言葉を入れて、今日も地道に音を合わせましょう。</p>
+      <p class="login-copy">今日も練習 楽しみましょ♬</p>
       <form id="passcodeForm" class="passcode-form">
         <label for="passcodeInput">パスコード</label>
-        <input id="passcodeInput" type="password" autocomplete="current-password" placeholder="band1234">
+        <input id="passcodeInput" type="password" autocomplete="current-password">
         <button type="submit">入る</button>
         <p id="passcodeError" class="error-message" aria-live="polite"></p>
       </form>
     </section>
   </div>
 
+  <div id="roleScreen" class="role-screen" hidden>
+    <section class="role-panel" aria-labelledby="roleTitle">
+      <p class="kicker">CHOOSE YOUR ROLE</p>
+      <h1 id="roleTitle">入室方法を選ぶ</h1>
+      <p class="login-copy">管理者は編集と共有、メンバーは自分の予定だけ入力できます。</p>
+
+      <form id="adminLoginForm" class="admin-login-form">
+        <h2>管理者として入る</h2>
+        <label for="adminPasscodeInput">管理者パスコード</label>
+        <input id="adminPasscodeInput" type="password" autocomplete="off">
+        <button type="submit">管理者として入る</button>
+        <p id="adminError" class="error-message" aria-live="polite"></p>
+      </form>
+
+      <section class="role-member-section" aria-labelledby="roleMemberTitle">
+        <h2 id="roleMemberTitle">メンバーとして入る</h2>
+        <div id="roleMemberList" class="role-member-list" aria-live="polite"></div>
+        <form id="memberPinForm" class="member-pin-form" hidden>
+          <p id="pinMemberName" class="pin-member-name"></p>
+          <label for="roleMemberPinInput">PIN</label>
+          <input id="roleMemberPinInput" type="password" inputmode="numeric" autocomplete="off" placeholder="メンバーPIN">
+          <div class="pin-actions">
+            <button type="submit">このメンバーで入る</button>
+            <button id="pinCancelButton" class="ghost-button" type="button">キャンセル</button>
+          </div>
+          <p id="pinError" class="error-message" aria-live="polite"></p>
+        </form>
+      </section>
+    </section>
+  </div>
+
   <main id="app" class="app" hidden>
     <header class="app-header">
       <div>
-        <p class="kicker">NO ACCOUNT / LOCAL PROTOTYPE</p>
+        <p class="kicker">アカウント不要</p>
         <h1>練習日きめるくん</h1>
       </div>
       <div class="header-actions">
@@ -36,7 +67,7 @@
       </div>
     </header>
 
-    <section class="connection-panel" aria-label="Firebase接続状態">
+    <section id="connectionPanel" class="connection-panel" aria-label="Firebase接続状態">
       <div>
         <p id="systemStatus" class="system-status is-loading" aria-live="polite">Firebaseに接続中...</p>
         <p class="room-label">ルーム：<span id="roomIdLabel"></span></p>
@@ -53,6 +84,7 @@
           <h2 id="memberTitle">メンバー</h2>
           <span id="activeMemberBadge" class="active-member-badge">未選択</span>
         </div>
+        <p id="modeHelp" class="mode-help" hidden aria-live="polite"></p>
         <p id="memberNotice" class="member-notice" hidden aria-live="polite"></p>
 
         <form id="memberForm" class="member-form">
@@ -60,10 +92,40 @@
           <input id="memberNameInput" type="text" maxlength="20" placeholder="例：タカシ">
           <label for="memberColorInput">色</label>
           <input id="memberColorInput" type="color" value="#ffcf33" aria-label="メンバー色">
+          <label for="memberPinAdminInput">PIN</label>
+          <input id="memberPinAdminInput" type="text" maxlength="6" inputmode="numeric" autocomplete="off" placeholder="6桁PIN">
           <button type="submit">追加</button>
         </form>
 
         <div id="memberList" class="member-list" aria-live="polite"></div>
+
+        <form id="adminPinResetForm" class="pin-reset-form" hidden>
+          <p id="resetPinMemberName" class="pin-member-name"></p>
+          <label for="resetPinInput">新しいPIN</label>
+          <input id="resetPinInput" type="text" maxlength="6" inputmode="numeric" autocomplete="off" placeholder="半角数字6桁">
+          <div class="pin-actions">
+            <button type="submit">PINを再設定</button>
+            <button id="resetPinCancelButton" class="ghost-button" type="button">キャンセル</button>
+          </div>
+          <p id="resetPinStatus" class="error-message" aria-live="polite"></p>
+        </form>
+
+        <div id="memberSelfTools" class="member-self-tools" hidden>
+          <button id="togglePinChangeButton" class="subtle-button" type="button">PINを変更</button>
+          <form id="pinChangeForm" class="pin-change-form" hidden>
+            <label for="currentPinInput">現在のPIN</label>
+            <input id="currentPinInput" type="password" inputmode="numeric" autocomplete="off" placeholder="現在のPIN">
+            <label for="newPinInput">新しいPIN</label>
+            <input id="newPinInput" type="password" maxlength="6" inputmode="numeric" autocomplete="off" placeholder="半角数字6桁">
+            <label for="newPinConfirmInput">新しいPIN確認用</label>
+            <input id="newPinConfirmInput" type="password" maxlength="6" inputmode="numeric" autocomplete="off" placeholder="もう一度入力">
+            <div class="pin-actions">
+              <button type="submit">変更する</button>
+              <button id="pinChangeCancelButton" class="ghost-button" type="button">キャンセル</button>
+            </div>
+            <p id="pinChangeStatus" class="error-message" aria-live="polite"></p>
+          </form>
+        </div>
       </section>
 
       <section class="panel candidates-panel" aria-labelledby="candidateTitle">

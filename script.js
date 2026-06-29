@@ -1,6 +1,8 @@
 const APP_CONFIG = {
   passcode: "band1234",
+  adminPasscode: "admin1234",
   activeMemberStorageKey: "renshuubi-kimeru-kun-active-member-v2",
+  pinPattern: /^\d{6}$/,
   timeSlots: ["18:00〜20:00", "19:00〜21:00", "20:00〜22:00", "21:00〜23:00"],
   weekdayLabels: ["日", "月", "火", "水", "木", "金", "土"],
   starterColors: ["#ffcf33", "#61d394", "#64b5f6", "#f28b82", "#c58cff", "#ff9f43"]
@@ -20,6 +22,9 @@ function createDefaultState() {
   const today = new Date();
   return {
     authenticated: false,
+    role: null,
+    pendingMemberId: null,
+    pendingPinResetMemberId: null,
     currentYear: today.getFullYear(),
     currentMonth: today.getMonth(),
     activeMemberId: null,
@@ -39,10 +44,21 @@ let hasBoundEvents = false;
 
 const elements = {
   passcodeScreen: document.getElementById("passcodeScreen"),
+  roleScreen: document.getElementById("roleScreen"),
   passcodeForm: document.getElementById("passcodeForm"),
   passcodeInput: document.getElementById("passcodeInput"),
   passcodeError: document.getElementById("passcodeError"),
+  adminLoginForm: document.getElementById("adminLoginForm"),
+  adminPasscodeInput: document.getElementById("adminPasscodeInput"),
+  adminError: document.getElementById("adminError"),
+  roleMemberList: document.getElementById("roleMemberList"),
+  memberPinForm: document.getElementById("memberPinForm"),
+  pinMemberName: document.getElementById("pinMemberName"),
+  roleMemberPinInput: document.getElementById("roleMemberPinInput"),
+  pinCancelButton: document.getElementById("pinCancelButton"),
+  pinError: document.getElementById("pinError"),
   app: document.getElementById("app"),
+  connectionPanel: document.getElementById("connectionPanel"),
   systemStatus: document.getElementById("systemStatus"),
   roomIdLabel: document.getElementById("roomIdLabel"),
   copyShareUrlButton: document.getElementById("copyShareUrlButton"),
@@ -50,12 +66,27 @@ const elements = {
   logoutButton: document.getElementById("logoutButton"),
   resetButton: document.getElementById("resetButton"),
   memberPanel: document.getElementById("memberPanel"),
+  modeHelp: document.getElementById("modeHelp"),
   memberNotice: document.getElementById("memberNotice"),
   memberForm: document.getElementById("memberForm"),
   memberNameInput: document.getElementById("memberNameInput"),
   memberColorInput: document.getElementById("memberColorInput"),
+  memberPinAdminInput: document.getElementById("memberPinAdminInput"),
   memberList: document.getElementById("memberList"),
   activeMemberBadge: document.getElementById("activeMemberBadge"),
+  adminPinResetForm: document.getElementById("adminPinResetForm"),
+  resetPinMemberName: document.getElementById("resetPinMemberName"),
+  resetPinInput: document.getElementById("resetPinInput"),
+  resetPinCancelButton: document.getElementById("resetPinCancelButton"),
+  resetPinStatus: document.getElementById("resetPinStatus"),
+  memberSelfTools: document.getElementById("memberSelfTools"),
+  togglePinChangeButton: document.getElementById("togglePinChangeButton"),
+  pinChangeForm: document.getElementById("pinChangeForm"),
+  currentPinInput: document.getElementById("currentPinInput"),
+  newPinInput: document.getElementById("newPinInput"),
+  newPinConfirmInput: document.getElementById("newPinConfirmInput"),
+  pinChangeCancelButton: document.getElementById("pinChangeCancelButton"),
+  pinChangeStatus: document.getElementById("pinChangeStatus"),
   candidateCount: document.getElementById("candidateCount"),
   candidateList: document.getElementById("candidateList"),
   copyCandidatesButton: document.getElementById("copyCandidatesButton"),
@@ -118,6 +149,15 @@ function applyRoomData(roomData) {
     : new Date().getMonth();
 
   if (state.activeMemberId && !state.members.some((member) => member.id === state.activeMemberId)) {
+    if (state.role === "member") {
+      state.role = null;
+      state.pendingMemberId = null;
+      state.activeMemberId = null;
+      saveActiveMember();
+      state.dataReady = true;
+      return;
+    }
+
     state.activeMemberId = state.members[0]?.id || null;
     saveActiveMember();
   }
@@ -135,6 +175,58 @@ function saveActiveMember() {
 
 function getActiveMemberStorageKey() {
   return `${APP_CONFIG.activeMemberStorageKey}:${roomId}`;
+}
+
+function isAdminMode() {
+  return state.role === "admin";
+}
+
+function isMemberMode() {
+  return state.role === "member";
+}
+
+function enterAdminMode() {
+  state.role = "admin";
+  state.pendingMemberId = null;
+  clearPinChangeForm();
+
+  if (!getActiveMember()) {
+    state.activeMemberId = state.members[0]?.id || null;
+    saveActiveMember();
+  }
+
+  hideRoleErrors();
+  render();
+}
+
+function selectRoleMember(memberId) {
+  const member = getMemberById(memberId);
+  if (!member) return;
+
+  state.pendingMemberId = memberId;
+  elements.pinMemberName.textContent = `${member.name}さんのPINを入力してください`;
+  elements.memberPinForm.hidden = false;
+  elements.roleMemberPinInput.value = "";
+  elements.pinError.textContent = "";
+  elements.roleMemberPinInput.focus();
+}
+
+function enterMemberMode(memberId) {
+  state.role = "member";
+  state.pendingMemberId = null;
+  state.pendingPinResetMemberId = null;
+  state.activeMemberId = memberId;
+  saveActiveMember();
+  hideRoleErrors();
+  hidePinResetForm();
+  render();
+}
+
+function hideRoleErrors() {
+  elements.adminError.textContent = "";
+  elements.pinError.textContent = "";
+  elements.memberPinForm.hidden = true;
+  elements.roleMemberPinInput.value = "";
 }
 
 async function initFirebase() {
@@ -199,18 +291,49 @@ function canUseSharedData() {
 }
 
 function setControlsDisabled(disabled) {
+  const adminDisabled = disabled || !isAdminMode();
+  const memberDisabled = disabled || !isMemberMode();
+
   [
-    elements.resetButton,
     elements.memberNameInput,
     elements.memberColorInput,
+    elements.memberPinAdminInput,
+    elements.resetPinInput,
     elements.copyCandidatesButton,
+    elements.copyShareUrlButton,
+    elements.resetButton
+  ].forEach((element) => {
+    element.disabled = adminDisabled;
+  });
+
+  [
     elements.prevMonthButton,
     elements.nextMonthButton
   ].forEach((element) => {
     element.disabled = disabled;
   });
 
-  elements.memberForm.querySelector("button").disabled = disabled;
+  elements.memberForm.querySelector("button").disabled = adminDisabled;
+  elements.adminPinResetForm.querySelectorAll("button").forEach((button) => {
+    button.disabled = adminDisabled;
+  });
+  elements.pinChangeForm.querySelectorAll("input, button").forEach((element) => {
+    element.disabled = memberDisabled;
+  });
+  elements.memberForm.hidden = !isAdminMode();
+  elements.resetButton.hidden = !isAdminMode();
+  elements.connectionPanel.hidden = isMemberMode();
+  elements.memberSelfTools.hidden = !isMemberMode() || !getActiveMember();
+  elements.copyCandidatesButton.closest(".candidate-actions").hidden = !isAdminMode();
+  elements.copyShareUrlButton.closest(".share-actions").hidden = !isAdminMode();
+
+  if (!isAdminMode()) {
+    hidePinResetForm();
+  }
+
+  if (!isMemberMode()) {
+    clearPinChangeForm();
+  }
 }
 
 function getMonthKey(year = state.currentYear, month = state.currentMonth) {
@@ -229,6 +352,39 @@ function makeMemberId() {
   return `member-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+async function hashPin(pin) {
+  if (!window.crypto || !window.crypto.subtle) {
+    throw new Error("Web Crypto API is not available");
+  }
+
+  const encoded = new TextEncoder().encode(pin);
+  const digest = await window.crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function verifyMemberPin(member, inputPin) {
+  if (member.pinHash) {
+    return await hashPin(inputPin) === member.pinHash;
+  }
+
+  // 旧バージョンで平文保存されていたPINとの互換性を残します。
+  if (typeof member.pin === "string") {
+    return inputPin === member.pin;
+  }
+
+  return inputPin === "";
+}
+
+async function saveMemberPinHash(memberId, pin) {
+  const pinHash = await hashPin(pin);
+  await roomRef.child(`members/${memberId}`).update({
+    pinHash,
+    pin: null
+  });
+}
+
 function getActiveMember() {
   return state.members.find((member) => member.id === state.activeMemberId) || null;
 }
@@ -239,26 +395,48 @@ function getAvailabilityFor(dateKey, slot) {
   return Object.keys(memberMap).filter((memberId) => memberMap[memberId]);
 }
 
-async function addMember(name, color) {
+async function addMember(name, color, pin) {
   if (!canUseSharedData()) {
     showMemberNotice("まだデータ読み込み中です。少し待ってから追加してください。");
-    return;
+    return false;
+  }
+
+  if (!isAdminMode()) {
+    showMemberNotice("メンバー追加は管理者だけができます。");
+    return false;
+  }
+
+  if (!APP_CONFIG.pinPattern.test(pin)) {
+    showMemberNotice("PINは半角数字6桁で入力してください。");
+    elements.memberPinAdminInput.focus();
+    return false;
+  }
+
+  let pinHash = "";
+  try {
+    pinHash = await hashPin(pin);
+  } catch (error) {
+    console.error("PINハッシュ化エラー", error);
+    showMemberNotice("PINを安全に保存できませんでした。ブラウザを更新してもう一度試してください。");
+    return false;
   }
 
   const member = {
     id: makeMemberId(),
     name,
-    color
+    color,
+    pinHash
   };
 
   state.activeMemberId = member.id;
   saveActiveMember();
   hideMemberNotice();
   await roomRef.child(`members/${member.id}`).set(member);
+  return true;
 }
 
 async function deleteMember(memberId) {
-  if (!canUseSharedData()) return;
+  if (!canUseSharedData() || !isAdminMode()) return;
 
   const member = state.members.find((item) => item.id === memberId);
   if (!member) return;
@@ -416,15 +594,45 @@ function setShareStatus(message) {
 
 function showPasscodeScreen() {
   elements.passcodeScreen.hidden = false;
+  elements.roleScreen.hidden = true;
   elements.app.hidden = true;
   elements.passcodeInput.value = "";
   elements.passcodeError.textContent = "";
   setTimeout(() => elements.passcodeInput.focus(), 0);
 }
 
+function showRoleScreen() {
+  elements.passcodeScreen.hidden = true;
+  elements.roleScreen.hidden = false;
+  elements.app.hidden = true;
+  renderRoleMemberList();
+}
+
 function showApp() {
   elements.passcodeScreen.hidden = true;
+  elements.roleScreen.hidden = true;
   elements.app.hidden = false;
+}
+
+function renderRoleMemberList() {
+  if (!state.dataReady) {
+    elements.roleMemberList.innerHTML = '<p class="empty-state">Firebaseからメンバーを読み込み中です。</p>';
+    elements.memberPinForm.hidden = true;
+    return;
+  }
+
+  if (state.members.length === 0) {
+    elements.roleMemberList.innerHTML = '<p class="empty-state">まだメンバーが登録されていません。管理者として入って追加してください。</p>';
+    elements.memberPinForm.hidden = true;
+    return;
+  }
+
+  elements.roleMemberList.innerHTML = state.members.map((member) => `
+    <button class="role-member-button" type="button" data-role-member-id="${member.id}">
+      <span class="member-dot" style="background:${member.color}"></span>
+      <span class="member-name">${escapeHtml(member.name)}</span>
+    </button>
+  `).join("");
 }
 
 function showMemberNotice(message) {
@@ -447,17 +655,37 @@ function hideMemberNotice() {
 function renderMemberList() {
   const activeMember = getActiveMember();
 
-  elements.activeMemberBadge.textContent = activeMember ? `入力中：${activeMember.name}` : "未選択";
-  elements.activeMemberBadge.style.background = activeMember ? activeMember.color : "";
-  elements.activeMemberBadge.style.color = activeMember ? getReadableTextColor(activeMember.color) : "";
+  elements.activeMemberBadge.classList.toggle("is-admin-mode", isAdminMode());
+  elements.activeMemberBadge.classList.toggle("is-member-mode", isMemberMode());
+  elements.activeMemberBadge.style.background = "";
+  elements.activeMemberBadge.style.color = "";
+
+  if (isAdminMode()) {
+    elements.activeMemberBadge.textContent = "管理者モード";
+    elements.modeHelp.innerHTML = '<span class="mode-help-primary">管理者モードです。</span><span class="mode-help-note">メンバー追加・削除、PIN再設定、共有URLコピー、全データリセットができます。</span>';
+    elements.modeHelp.hidden = false;
+  } else if (isMemberMode() && activeMember) {
+    elements.activeMemberBadge.textContent = `メンバーモード：${activeMember.name}`;
+    elements.activeMemberBadge.style.background = activeMember.color;
+    elements.activeMemberBadge.style.color = getReadableTextColor(activeMember.color);
+    elements.modeHelp.textContent = `${activeMember.name}さんとして入力中です。自分の予定だけ変更できます。`;
+    elements.modeHelp.hidden = false;
+  } else {
+    elements.activeMemberBadge.textContent = "未選択";
+    elements.modeHelp.hidden = true;
+  }
 
   if (!state.dataReady) {
     elements.memberList.innerHTML = '<p class="empty-state">Firebaseからデータを読み込み中です。</p>';
+    renderPinResetForm();
+    renderMemberSelfTools();
     return;
   }
 
   if (state.members.length === 0) {
     elements.memberList.innerHTML = '<p class="empty-state">まずはメンバーを追加してください。追加した人を選ぶと、カレンダーに入力できます。</p>';
+    renderPinResetForm();
+    renderMemberSelfTools();
     return;
   }
 
@@ -465,14 +693,63 @@ function renderMemberList() {
     const isActive = member.id === state.activeMemberId;
     return `
       <div class="member-item ${isActive ? "is-active" : ""}">
-        <button class="member-select" type="button" data-member-id="${member.id}">
+        <button class="member-select" type="button" data-member-id="${member.id}" ${!isAdminMode() ? "disabled" : ""}>
           <span class="member-dot" style="background:${member.color}"></span>
           <span class="member-name">${escapeHtml(member.name)}</span>
         </button>
-        <button class="delete-member" type="button" data-delete-member-id="${member.id}" aria-label="${escapeHtml(member.name)}さんを削除">×</button>
+        ${isAdminMode() ? `
+          <div class="member-admin-actions">
+            <button class="reset-pin-button" type="button" data-reset-pin-member-id="${member.id}">PIN再設定</button>
+            <button class="delete-member" type="button" data-delete-member-id="${member.id}" aria-label="${escapeHtml(member.name)}さんを削除">×</button>
+          </div>
+        ` : ""}
       </div>
     `;
   }).join("");
+
+  renderPinResetForm();
+  renderMemberSelfTools();
+}
+
+function renderPinResetForm() {
+  if (!isAdminMode() || !state.dataReady || !state.pendingPinResetMemberId) {
+    elements.adminPinResetForm.hidden = true;
+    return;
+  }
+
+  const member = getMemberById(state.pendingPinResetMemberId);
+  if (!member) {
+    hidePinResetForm();
+    return;
+  }
+
+  elements.resetPinMemberName.textContent = `${member.name}さんのPINを再設定`;
+  elements.adminPinResetForm.hidden = false;
+}
+
+function hidePinResetForm() {
+  state.pendingPinResetMemberId = null;
+  elements.adminPinResetForm.hidden = true;
+  elements.resetPinInput.value = "";
+  elements.resetPinStatus.textContent = "";
+}
+
+function renderMemberSelfTools() {
+  const activeMember = getActiveMember();
+  elements.memberSelfTools.hidden = !isMemberMode() || !activeMember || !state.dataReady;
+
+  if (!isMemberMode() || !activeMember) {
+    clearPinChangeForm();
+  }
+}
+
+function clearPinChangeForm() {
+  elements.pinChangeForm.hidden = true;
+  elements.currentPinInput.value = "";
+  elements.newPinInput.value = "";
+  elements.newPinConfirmInput.value = "";
+  elements.pinChangeStatus.style.color = "";
+  elements.pinChangeStatus.textContent = "";
 }
 
 function renderCalendar() {
@@ -579,10 +856,12 @@ function renderCandidates() {
 }
 
 function render() {
-  if (state.authenticated) {
-    showApp();
-  } else {
+  if (!state.authenticated) {
     showPasscodeScreen();
+  } else if (!state.role) {
+    showRoleScreen();
+  } else {
+    showApp();
   }
 
   setControlsDisabled(!state.dataReady || Boolean(state.connectionError));
@@ -623,15 +902,72 @@ function bindEvents() {
     }
 
     state.authenticated = true;
+    state.role = null;
+    state.pendingMemberId = null;
     render();
+  });
+
+  elements.adminLoginForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const passcode = elements.adminPasscodeInput.value.trim();
+
+    if (passcode !== APP_CONFIG.adminPasscode) {
+      elements.adminError.textContent = "管理者パスコードが違います。";
+      return;
+    }
+
+    elements.adminPasscodeInput.value = "";
+    enterAdminMode();
+  });
+
+  elements.roleMemberList.addEventListener("click", (event) => {
+    const memberButton = event.target.closest("[data-role-member-id]");
+    if (!memberButton) return;
+    selectRoleMember(memberButton.dataset.roleMemberId);
+  });
+
+  elements.memberPinForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const member = getMemberById(state.pendingMemberId);
+    if (!member) {
+      elements.pinError.textContent = "メンバーが見つかりません。";
+      return;
+    }
+
+    const inputPin = elements.roleMemberPinInput.value.trim();
+
+    try {
+      const pinMatched = await verifyMemberPin(member, inputPin);
+      if (!pinMatched) {
+        elements.pinError.textContent = "PINが違います。";
+        return;
+      }
+    } catch (error) {
+      console.error("PIN確認エラー", error);
+      elements.pinError.textContent = "PINを確認できませんでした。ブラウザを更新してもう一度試してください。";
+      return;
+    }
+
+    enterMemberMode(member.id);
+  });
+
+  elements.pinCancelButton.addEventListener("click", () => {
+    state.pendingMemberId = null;
+    elements.memberPinForm.hidden = true;
+    elements.pinError.textContent = "";
+    elements.roleMemberPinInput.value = "";
   });
 
   elements.logoutButton.addEventListener("click", () => {
     state.authenticated = false;
+    state.role = null;
+    state.pendingMemberId = null;
     render();
   });
 
   elements.copyShareUrlButton.addEventListener("click", async () => {
+    if (!isAdminMode()) return;
+
     try {
       await copyTextToClipboard(window.location.href);
       setShareStatus("共有URLをコピーしました");
@@ -642,7 +978,7 @@ function bindEvents() {
   });
 
   elements.resetButton.addEventListener("click", async () => {
-    if (!canUseSharedData()) return;
+    if (!canUseSharedData() || !isAdminMode()) return;
 
     const confirmed = confirm("全データをリセットします。メンバーと入力済み予定も消えます。よろしいですか？");
     if (!confirmed) return;
@@ -653,6 +989,8 @@ function bindEvents() {
   });
 
   elements.copyCandidatesButton.addEventListener("click", async () => {
+    if (!isAdminMode()) return;
+
     const candidates = getMonthlyCandidates();
 
     if (candidates.length === 0) {
@@ -673,6 +1011,7 @@ function bindEvents() {
     event.preventDefault();
     const name = elements.memberNameInput.value.trim();
     const color = elements.memberColorInput.value;
+    const pin = elements.memberPinAdminInput.value.trim();
 
     if (!name) {
       alert("メンバー名を入力してください。");
@@ -680,8 +1019,11 @@ function bindEvents() {
       return;
     }
 
-    await addMember(name, color);
+    const added = await addMember(name, color, pin);
+    if (!added) return;
+
     elements.memberNameInput.value = "";
+    elements.memberPinAdminInput.value = "";
     elements.memberColorInput.value = APP_CONFIG.starterColors[state.members.length % APP_CONFIG.starterColors.length];
     elements.memberNameInput.focus();
   });
@@ -689,18 +1031,124 @@ function bindEvents() {
   elements.memberList.addEventListener("click", async (event) => {
     const selectButton = event.target.closest("[data-member-id]");
     const deleteButton = event.target.closest("[data-delete-member-id]");
+    const resetPinButton = event.target.closest("[data-reset-pin-member-id]");
+
+    if (resetPinButton) {
+      if (!isAdminMode()) return;
+      state.pendingPinResetMemberId = resetPinButton.dataset.resetPinMemberId;
+      elements.resetPinInput.value = "";
+      elements.resetPinStatus.textContent = "";
+      renderPinResetForm();
+      elements.resetPinInput.focus();
+      return;
+    }
 
     if (deleteButton) {
+      if (!isAdminMode()) return;
       await deleteMember(deleteButton.dataset.deleteMemberId);
       return;
     }
 
     if (selectButton) {
+      if (!isAdminMode()) return;
       state.activeMemberId = selectButton.dataset.memberId;
       saveActiveMember();
       hideMemberNotice();
       renderMemberList();
       renderCalendar();
+    }
+  });
+
+  elements.adminPinResetForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!canUseSharedData() || !isAdminMode()) return;
+
+    const member = getMemberById(state.pendingPinResetMemberId);
+    const newPin = elements.resetPinInput.value.trim();
+
+    if (!member) {
+      elements.resetPinStatus.textContent = "メンバーが見つかりません。";
+      return;
+    }
+
+    if (!APP_CONFIG.pinPattern.test(newPin)) {
+      elements.resetPinStatus.textContent = "PINは半角数字6桁で入力してください。";
+      elements.resetPinInput.focus();
+      return;
+    }
+
+    try {
+      await saveMemberPinHash(member.id, newPin);
+      hidePinResetForm();
+      showMemberNotice(`${member.name}さんのPINを再設定しました。`);
+    } catch (error) {
+      console.error("PIN再設定エラー", error);
+      elements.resetPinStatus.textContent = "PINを再設定できませんでした。もう一度試してください。";
+    }
+  });
+
+  elements.resetPinCancelButton.addEventListener("click", () => {
+    hidePinResetForm();
+  });
+
+  elements.togglePinChangeButton.addEventListener("click", () => {
+    elements.pinChangeForm.hidden = !elements.pinChangeForm.hidden;
+    elements.pinChangeStatus.textContent = "";
+
+    if (!elements.pinChangeForm.hidden) {
+      elements.currentPinInput.focus();
+    }
+  });
+
+  elements.pinChangeCancelButton.addEventListener("click", () => {
+    clearPinChangeForm();
+  });
+
+  elements.pinChangeForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!canUseSharedData() || !isMemberMode()) return;
+
+    const activeMember = getActiveMember();
+    const currentPin = elements.currentPinInput.value.trim();
+    const newPin = elements.newPinInput.value.trim();
+    const newPinConfirm = elements.newPinConfirmInput.value.trim();
+
+    elements.pinChangeStatus.style.color = "";
+
+    if (!activeMember) {
+      elements.pinChangeStatus.textContent = "メンバー情報が見つかりません。";
+      return;
+    }
+
+    if (!APP_CONFIG.pinPattern.test(newPin)) {
+      elements.pinChangeStatus.textContent = "新しいPINは半角数字6桁で入力してください。";
+      elements.newPinInput.focus();
+      return;
+    }
+
+    if (newPin !== newPinConfirm) {
+      elements.pinChangeStatus.textContent = "新しいPINと確認用PINが一致しません。";
+      elements.newPinConfirmInput.focus();
+      return;
+    }
+
+    try {
+      const currentPinMatched = await verifyMemberPin(activeMember, currentPin);
+      if (!currentPinMatched) {
+        elements.pinChangeStatus.textContent = "現在のPINが違います。";
+        elements.currentPinInput.focus();
+        return;
+      }
+
+      await saveMemberPinHash(activeMember.id, newPin);
+      elements.currentPinInput.value = "";
+      elements.newPinInput.value = "";
+      elements.newPinConfirmInput.value = "";
+      elements.pinChangeStatus.style.color = "#2e6b3f";
+      elements.pinChangeStatus.textContent = "PINを変更しました";
+    } catch (error) {
+      console.error("PIN変更エラー", error);
+      elements.pinChangeStatus.textContent = "PINを変更できませんでした。もう一度試してください。";
     }
   });
 
