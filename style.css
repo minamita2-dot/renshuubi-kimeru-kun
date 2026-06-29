@@ -173,6 +173,72 @@ h1 {
   gap: 10px;
 }
 
+.connection-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.14);
+}
+
+.system-status,
+.room-label,
+.share-status {
+  margin: 0;
+  font-weight: 800;
+}
+
+.system-status {
+  display: inline-block;
+  margin-bottom: 5px;
+  padding: 4px 8px;
+  border: 2px solid var(--ink);
+  background: #ffef99;
+}
+
+.system-status.is-ready {
+  color: #fff;
+  background: #2e6b3f;
+}
+
+.system-status.is-error {
+  color: #fff;
+  background: var(--danger);
+}
+
+.room-label,
+.share-status {
+  color: #444;
+  font-size: 0.9rem;
+}
+
+.share-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.share-button {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  background: #fff;
+  font-weight: 900;
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .ghost-button,
 .danger-button,
 .icon-button {
@@ -335,6 +401,30 @@ h1 {
   color: var(--muted);
   background: #fafafa;
   line-height: 1.6;
+}
+
+.candidate-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.copy-button {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  background: #ffcf33;
+  font-weight: 900;
+}
+
+.copy-status {
+  min-height: 1.4em;
+  color: #333;
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .candidate-list {
@@ -592,6 +682,20 @@ h1 {
     justify-content: space-between;
   }
 
+  .connection-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .share-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .share-button {
+    width: 100%;
+  }
+
   .header-actions button {
     flex: 0 1 auto;
   }
@@ -612,6 +716,15 @@ h1 {
 
   .candidate-list {
     grid-template-columns: 1fr;
+  }
+
+  .candidate-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .copy-button {
+    width: 100%;
   }
 
   .calendar-section {

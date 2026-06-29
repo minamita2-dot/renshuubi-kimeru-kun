@@ -1,9 +1,19 @@
 const APP_CONFIG = {
   passcode: "band1234",
-  storageKey: "renshuubi-kimeru-kun-v1",
+  activeMemberStorageKey: "renshuubi-kimeru-kun-active-member-v2",
   timeSlots: ["18:00〜20:00", "19:00〜21:00", "20:00〜22:00", "21:00〜23:00"],
   weekdayLabels: ["日", "月", "火", "水", "木", "金", "土"],
   starterColors: ["#ffcf33", "#61d394", "#64b5f6", "#f28b82", "#c58cff", "#ff9f43"]
+};
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBKmMEX7yN5afMf6zQ4J2H9oiS-r3s45uQ",
+  authDomain: "renshuubi-kimeru-kun-37b3a.firebaseapp.com",
+  databaseURL: "https://renshuubi-kimeru-kun-37b3a-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "renshuubi-kimeru-kun-37b3a",
+  storageBucket: "renshuubi-kimeru-kun-37b3a.firebasestorage.app",
+  messagingSenderId: "185383393904",
+  appId: "1:185383393904:web:f93495ba98306f80d732b5"
 };
 
 function createDefaultState() {
@@ -14,11 +24,18 @@ function createDefaultState() {
     currentMonth: today.getMonth(),
     activeMemberId: null,
     members: [],
-    availability: {}
+    availability: {},
+    dataReady: false,
+    firebaseReady: false,
+    connectionError: ""
   };
 }
 
-let state = loadState();
+let state = createDefaultState();
+let roomId = getOrCreateRoomId();
+let database = null;
+let roomRef = null;
+let hasBoundEvents = false;
 
 const elements = {
   passcodeScreen: document.getElementById("passcodeScreen"),
@@ -26,6 +43,10 @@ const elements = {
   passcodeInput: document.getElementById("passcodeInput"),
   passcodeError: document.getElementById("passcodeError"),
   app: document.getElementById("app"),
+  systemStatus: document.getElementById("systemStatus"),
+  roomIdLabel: document.getElementById("roomIdLabel"),
+  copyShareUrlButton: document.getElementById("copyShareUrlButton"),
+  shareStatus: document.getElementById("shareStatus"),
   logoutButton: document.getElementById("logoutButton"),
   resetButton: document.getElementById("resetButton"),
   memberPanel: document.getElementById("memberPanel"),
@@ -37,43 +58,159 @@ const elements = {
   activeMemberBadge: document.getElementById("activeMemberBadge"),
   candidateCount: document.getElementById("candidateCount"),
   candidateList: document.getElementById("candidateList"),
+  copyCandidatesButton: document.getElementById("copyCandidatesButton"),
+  copyStatus: document.getElementById("copyStatus"),
   prevMonthButton: document.getElementById("prevMonthButton"),
   nextMonthButton: document.getElementById("nextMonthButton"),
   calendarTitle: document.getElementById("calendarTitle"),
   calendarGrid: document.getElementById("calendarGrid")
 };
 
-function loadState() {
-  try {
-    const rawData = localStorage.getItem(APP_CONFIG.storageKey);
-    const freshState = createDefaultState();
-    if (!rawData) return freshState;
+state.activeMemberId = localStorage.getItem(getActiveMemberStorageKey());
 
-    const savedState = JSON.parse(rawData);
-    return {
-      ...freshState,
-      ...savedState,
-      authenticated: false,
-      members: Array.isArray(savedState.members) ? savedState.members : [],
-      availability: savedState.availability && typeof savedState.availability === "object"
-        ? savedState.availability
-        : {}
-    };
-  } catch (error) {
-    console.warn("保存データの読み込みに失敗しました。初期状態で起動します。", error);
-    return createDefaultState();
+function getOrCreateRoomId() {
+  const url = new URL(window.location.href);
+  const existingRoomId = url.searchParams.get("room");
+
+  if (existingRoomId && /^[a-zA-Z0-9_-]{3,60}$/.test(existingRoomId)) {
+    return existingRoomId;
+  }
+
+  const newRoomId = `room-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  url.searchParams.set("room", newRoomId);
+  window.history.replaceState({}, "", url.toString());
+  return newRoomId;
+}
+
+function getInitialSharedData() {
+  const today = new Date();
+  return {
+    members: {},
+    availability: {},
+    currentYear: today.getFullYear(),
+    currentMonth: today.getMonth()
+  };
+}
+
+function normalizeMembers(membersData) {
+  if (!membersData) return [];
+
+  if (Array.isArray(membersData)) {
+    return membersData.filter(Boolean);
+  }
+
+  return Object.values(membersData).filter((member) => member && member.id);
+}
+
+function normalizeAvailability(availabilityData) {
+  return availabilityData && typeof availabilityData === "object" ? availabilityData : {};
+}
+
+function applyRoomData(roomData) {
+  const sharedData = roomData || getInitialSharedData();
+  state.members = normalizeMembers(sharedData.members);
+  state.availability = normalizeAvailability(sharedData.availability);
+  state.currentYear = Number.isInteger(sharedData.currentYear)
+    ? sharedData.currentYear
+    : new Date().getFullYear();
+  state.currentMonth = Number.isInteger(sharedData.currentMonth)
+    ? sharedData.currentMonth
+    : new Date().getMonth();
+
+  if (state.activeMemberId && !state.members.some((member) => member.id === state.activeMemberId)) {
+    state.activeMemberId = state.members[0]?.id || null;
+    saveActiveMember();
+  }
+
+  state.dataReady = true;
+}
+
+function saveActiveMember() {
+  if (state.activeMemberId) {
+    localStorage.setItem(getActiveMemberStorageKey(), state.activeMemberId);
+  } else {
+    localStorage.removeItem(getActiveMemberStorageKey());
   }
 }
 
-function saveState() {
-  localStorage.setItem(APP_CONFIG.storageKey, JSON.stringify(state));
+function getActiveMemberStorageKey() {
+  return `${APP_CONFIG.activeMemberStorageKey}:${roomId}`;
 }
 
-function resetState() {
-  localStorage.removeItem(APP_CONFIG.storageKey);
-  state = createDefaultState();
-  showPasscodeScreen();
-  render();
+async function initFirebase() {
+  elements.roomIdLabel.textContent = roomId;
+  setSystemStatus("loading", "Firebaseに接続中...");
+  setControlsDisabled(true);
+
+  try {
+    if (!window.firebase) {
+      throw new Error("Firebase SDKを読み込めませんでした。");
+    }
+
+    firebase.initializeApp(firebaseConfig);
+    await firebase.auth().signInAnonymously();
+    database = firebase.database();
+    roomRef = database.ref(`rooms/${roomId}`);
+    await ensureRoomExists();
+    subscribeRoom();
+    subscribeConnectionState();
+  } catch (error) {
+    console.error("Firebase接続エラー", error);
+    state.connectionError = "Firebaseに接続できませんでした。設定や通信環境を確認してください。";
+    setSystemStatus("error", state.connectionError);
+    render();
+  }
+}
+
+async function ensureRoomExists() {
+  const snapshot = await roomRef.once("value");
+  if (!snapshot.exists()) {
+    await roomRef.set(getInitialSharedData());
+  }
+}
+
+function subscribeRoom() {
+  roomRef.on("value", (snapshot) => {
+    applyRoomData(snapshot.val());
+    setSystemStatus("ready", "Firebase同期中");
+    render();
+  }, (error) => {
+    console.error("データ読み込みエラー", error);
+    state.connectionError = "予定データを読み込めませんでした。";
+    setSystemStatus("error", state.connectionError);
+    render();
+  });
+}
+
+function subscribeConnectionState() {
+  database.ref(".info/connected").on("value", (snapshot) => {
+    if (!state.dataReady || state.connectionError) return;
+    setSystemStatus(snapshot.val() ? "ready" : "loading", snapshot.val() ? "Firebase同期中" : "再接続中...");
+  });
+}
+
+function setSystemStatus(type, message) {
+  elements.systemStatus.textContent = message;
+  elements.systemStatus.className = `system-status is-${type}`;
+}
+
+function canUseSharedData() {
+  return state.dataReady && !state.connectionError && roomRef;
+}
+
+function setControlsDisabled(disabled) {
+  [
+    elements.resetButton,
+    elements.memberNameInput,
+    elements.memberColorInput,
+    elements.copyCandidatesButton,
+    elements.prevMonthButton,
+    elements.nextMonthButton
+  ].forEach((element) => {
+    element.disabled = disabled;
+  });
+
+  elements.memberForm.querySelector("button").disabled = disabled;
 }
 
 function getMonthKey(year = state.currentYear, month = state.currentMonth) {
@@ -82,6 +219,10 @@ function getMonthKey(year = state.currentYear, month = state.currentMonth) {
 
 function getDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function encodeSlot(slot) {
+  return encodeURIComponent(slot).replace(/\./g, "%2E");
 }
 
 function makeMemberId() {
@@ -93,68 +234,63 @@ function getActiveMember() {
 }
 
 function getAvailabilityFor(dateKey, slot) {
-  const dateAvailability = state.availability[dateKey] || {};
-  return Array.isArray(dateAvailability[slot]) ? dateAvailability[slot] : [];
+  const slotKey = encodeSlot(slot);
+  const memberMap = state.availability?.[dateKey]?.[slotKey] || {};
+  return Object.keys(memberMap).filter((memberId) => memberMap[memberId]);
 }
 
-function setAvailabilityFor(dateKey, slot, memberIds) {
-  if (!state.availability[dateKey]) {
-    state.availability[dateKey] = {};
+async function addMember(name, color) {
+  if (!canUseSharedData()) {
+    showMemberNotice("まだデータ読み込み中です。少し待ってから追加してください。");
+    return;
   }
 
-  state.availability[dateKey][slot] = memberIds;
-
-  if (memberIds.length === 0) {
-    delete state.availability[dateKey][slot];
-  }
-
-  if (Object.keys(state.availability[dateKey]).length === 0) {
-    delete state.availability[dateKey];
-  }
-}
-
-function removeMemberFromAvailability(memberId) {
-  Object.keys(state.availability).forEach((dateKey) => {
-    Object.keys(state.availability[dateKey]).forEach((slot) => {
-      const nextIds = state.availability[dateKey][slot].filter((id) => id !== memberId);
-      setAvailabilityFor(dateKey, slot, nextIds);
-    });
-  });
-}
-
-function addMember(name, color) {
   const member = {
     id: makeMemberId(),
     name,
     color
   };
 
-  state.members.push(member);
   state.activeMemberId = member.id;
+  saveActiveMember();
   hideMemberNotice();
-  saveState();
-  render();
+  await roomRef.child(`members/${member.id}`).set(member);
 }
 
-function deleteMember(memberId) {
+async function deleteMember(memberId) {
+  if (!canUseSharedData()) return;
+
   const member = state.members.find((item) => item.id === memberId);
   if (!member) return;
 
   const confirmed = confirm(`${member.name}さんを削除します。登録済みの参加可能データからも消えます。`);
   if (!confirmed) return;
 
-  state.members = state.members.filter((item) => item.id !== memberId);
-  removeMemberFromAvailability(memberId);
+  const updates = {};
+  updates[`members/${memberId}`] = null;
+
+  Object.keys(state.availability).forEach((dateKey) => {
+    Object.keys(state.availability[dateKey]).forEach((slotKey) => {
+      if (state.availability[dateKey][slotKey]?.[memberId]) {
+        updates[`availability/${dateKey}/${slotKey}/${memberId}`] = null;
+      }
+    });
+  });
 
   if (state.activeMemberId === memberId) {
-    state.activeMemberId = state.members[0]?.id || null;
+    state.activeMemberId = state.members.find((item) => item.id !== memberId)?.id || null;
+    saveActiveMember();
   }
 
-  saveState();
-  render();
+  await roomRef.update(updates);
 }
 
-function toggleAvailability(dateKey, slot) {
+async function toggleAvailability(dateKey, slot) {
+  if (!canUseSharedData()) {
+    showMemberNotice("まだデータ読み込み中です。少し待ってから入力してください。");
+    return;
+  }
+
   const activeMember = getActiveMember();
   if (!activeMember) {
     showMemberNotice(
@@ -165,16 +301,9 @@ function toggleAvailability(dateKey, slot) {
     return;
   }
 
-  const memberIds = getAvailabilityFor(dateKey, slot);
-  const isSelected = memberIds.includes(activeMember.id);
-  const nextIds = isSelected
-    ? memberIds.filter((id) => id !== activeMember.id)
-    : [...memberIds, activeMember.id];
-
-  setAvailabilityFor(dateKey, slot, nextIds);
-  saveState();
-  renderCalendar();
-  renderCandidates();
+  const slotKey = encodeSlot(slot);
+  const selected = getAvailabilityFor(dateKey, slot).includes(activeMember.id);
+  await roomRef.child(`availability/${dateKey}/${slotKey}/${activeMember.id}`).set(selected ? null : true);
 }
 
 function getCalendarDates(year, month) {
@@ -236,6 +365,55 @@ function getMonthlyCandidates() {
   return candidates;
 }
 
+function createCandidateCopyText(candidates) {
+  const candidateLines = candidates.map((candidate) => {
+    const readable = getReadableDate(candidate.dateKey);
+    return `・${readable.label}${candidate.slot}`;
+  });
+
+  return [
+    "練習候補日です！",
+    "",
+    ...candidateLines,
+    "",
+    "どれかでスタジオ取ります！"
+  ].join("\n");
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  try {
+    const copied = document.execCommand("copy");
+    if (!copied) {
+      throw new Error("copy command failed");
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+function setCopyStatus(message) {
+  elements.copyStatus.textContent = message;
+}
+
+function setShareStatus(message) {
+  elements.shareStatus.textContent = message;
+}
+
 function showPasscodeScreen() {
   elements.passcodeScreen.hidden = false;
   elements.app.hidden = true;
@@ -257,8 +435,6 @@ function showMemberNotice(message) {
 
   if (state.members.length === 0) {
     elements.memberNameInput.focus();
-  } else {
-    elements.memberList.focus?.();
   }
 }
 
@@ -274,6 +450,11 @@ function renderMemberList() {
   elements.activeMemberBadge.textContent = activeMember ? `入力中：${activeMember.name}` : "未選択";
   elements.activeMemberBadge.style.background = activeMember ? activeMember.color : "";
   elements.activeMemberBadge.style.color = activeMember ? getReadableTextColor(activeMember.color) : "";
+
+  if (!state.dataReady) {
+    elements.memberList.innerHTML = '<p class="empty-state">Firebaseからデータを読み込み中です。</p>';
+    return;
+  }
 
   if (state.members.length === 0) {
     elements.memberList.innerHTML = '<p class="empty-state">まずはメンバーを追加してください。追加した人を選ぶと、カレンダーに入力できます。</p>';
@@ -337,7 +518,7 @@ function renderSlotButton(dateKey, slot) {
   ].filter(Boolean).join(" ");
 
   return `
-    <button class="${className}" type="button" data-date-key="${dateKey}" data-slot="${slot}">
+    <button class="${className}" type="button" data-date-key="${dateKey}" data-slot="${slot}" ${!state.dataReady ? "disabled" : ""}>
       <span class="slot-time">
         <span>${slot}</span>
         ${isComplete ? '<span class="complete-label">全員OK</span>' : ""}
@@ -369,6 +550,12 @@ function renderAttendeeChips(memberIds) {
 function renderCandidates() {
   const candidates = getMonthlyCandidates();
   elements.candidateCount.textContent = `${candidates.length}件`;
+  setCopyStatus("");
+
+  if (!state.dataReady) {
+    elements.candidateList.innerHTML = '<p class="empty-state">候補日を読み込み中です。</p>';
+    return;
+  }
 
   if (state.members.length === 0) {
     elements.candidateList.innerHTML = '<p class="empty-state">メンバーを追加すると、全員OKの候補がここに出ます。</p>';
@@ -398,6 +585,7 @@ function render() {
     showPasscodeScreen();
   }
 
+  setControlsDisabled(!state.dataReady || Boolean(state.connectionError));
   renderMemberList();
   renderCalendar();
   renderCandidates();
@@ -422,6 +610,9 @@ function escapeHtml(value) {
 }
 
 function bindEvents() {
+  if (hasBoundEvents) return;
+  hasBoundEvents = true;
+
   elements.passcodeForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const passcode = elements.passcodeInput.value.trim();
@@ -432,22 +623,53 @@ function bindEvents() {
     }
 
     state.authenticated = true;
-    saveState();
     render();
   });
 
   elements.logoutButton.addEventListener("click", () => {
     state.authenticated = false;
-    saveState();
     render();
   });
 
-  elements.resetButton.addEventListener("click", () => {
-    const confirmed = confirm("全データをリセットします。メンバーと入力済み予定も消えます。よろしいですか？");
-    if (confirmed) resetState();
+  elements.copyShareUrlButton.addEventListener("click", async () => {
+    try {
+      await copyTextToClipboard(window.location.href);
+      setShareStatus("共有URLをコピーしました");
+    } catch (error) {
+      console.warn("共有URLコピーに失敗しました。", error);
+      setShareStatus("共有URLのコピーに失敗しました");
+    }
   });
 
-  elements.memberForm.addEventListener("submit", (event) => {
+  elements.resetButton.addEventListener("click", async () => {
+    if (!canUseSharedData()) return;
+
+    const confirmed = confirm("全データをリセットします。メンバーと入力済み予定も消えます。よろしいですか？");
+    if (!confirmed) return;
+
+    state.activeMemberId = null;
+    saveActiveMember();
+    await roomRef.set(getInitialSharedData());
+  });
+
+  elements.copyCandidatesButton.addEventListener("click", async () => {
+    const candidates = getMonthlyCandidates();
+
+    if (candidates.length === 0) {
+      setCopyStatus("コピーできる候補日がありません");
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(createCandidateCopyText(candidates));
+      setCopyStatus("コピーしました");
+    } catch (error) {
+      console.warn("候補日のコピーに失敗しました。", error);
+      setCopyStatus("コピーに失敗しました");
+    }
+  });
+
+  elements.memberForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = elements.memberNameInput.value.trim();
     const color = elements.memberColorInput.value;
@@ -458,54 +680,57 @@ function bindEvents() {
       return;
     }
 
-    addMember(name, color);
+    await addMember(name, color);
     elements.memberNameInput.value = "";
     elements.memberColorInput.value = APP_CONFIG.starterColors[state.members.length % APP_CONFIG.starterColors.length];
     elements.memberNameInput.focus();
   });
 
-  elements.memberList.addEventListener("click", (event) => {
+  elements.memberList.addEventListener("click", async (event) => {
     const selectButton = event.target.closest("[data-member-id]");
     const deleteButton = event.target.closest("[data-delete-member-id]");
 
     if (deleteButton) {
-      deleteMember(deleteButton.dataset.deleteMemberId);
+      await deleteMember(deleteButton.dataset.deleteMemberId);
       return;
     }
 
     if (selectButton) {
       state.activeMemberId = selectButton.dataset.memberId;
+      saveActiveMember();
       hideMemberNotice();
-      saveState();
       renderMemberList();
       renderCalendar();
     }
   });
 
-  elements.calendarGrid.addEventListener("click", (event) => {
+  elements.calendarGrid.addEventListener("click", async (event) => {
     const slotButton = event.target.closest("[data-date-key][data-slot]");
     if (!slotButton) return;
-    toggleAvailability(slotButton.dataset.dateKey, slotButton.dataset.slot);
+    await toggleAvailability(slotButton.dataset.dateKey, slotButton.dataset.slot);
   });
 
-  elements.prevMonthButton.addEventListener("click", () => {
+  elements.prevMonthButton.addEventListener("click", async () => {
+    if (!canUseSharedData()) return;
+
     const previousMonth = new Date(state.currentYear, state.currentMonth - 1, 1);
-    state.currentYear = previousMonth.getFullYear();
-    state.currentMonth = previousMonth.getMonth();
-    saveState();
-    renderCalendar();
-    renderCandidates();
+    await roomRef.update({
+      currentYear: previousMonth.getFullYear(),
+      currentMonth: previousMonth.getMonth()
+    });
   });
 
-  elements.nextMonthButton.addEventListener("click", () => {
+  elements.nextMonthButton.addEventListener("click", async () => {
+    if (!canUseSharedData()) return;
+
     const nextMonth = new Date(state.currentYear, state.currentMonth + 1, 1);
-    state.currentYear = nextMonth.getFullYear();
-    state.currentMonth = nextMonth.getMonth();
-    saveState();
-    renderCalendar();
-    renderCandidates();
+    await roomRef.update({
+      currentYear: nextMonth.getFullYear(),
+      currentMonth: nextMonth.getMonth()
+    });
   });
 }
 
 bindEvents();
 render();
+initFirebase();

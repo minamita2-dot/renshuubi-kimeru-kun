@@ -36,6 +36,17 @@
       </div>
     </header>
 
+    <section class="connection-panel" aria-label="Firebase接続状態">
+      <div>
+        <p id="systemStatus" class="system-status is-loading" aria-live="polite">Firebaseに接続中...</p>
+        <p class="room-label">ルーム：<span id="roomIdLabel"></span></p>
+      </div>
+      <div class="share-actions">
+        <button id="copyShareUrlButton" class="share-button" type="button">共有URLをコピー</button>
+        <span id="shareStatus" class="share-status" aria-live="polite"></span>
+      </div>
+    </section>
+
     <section class="top-grid">
       <section id="memberPanel" class="panel member-panel" aria-labelledby="memberTitle">
         <div class="section-heading">
@@ -60,6 +71,10 @@
           <h2 id="candidateTitle">全員が集まれる候補一覧</h2>
           <span id="candidateCount" class="count-badge">0件</span>
         </div>
+        <div class="candidate-actions">
+          <button id="copyCandidatesButton" class="copy-button" type="button">候補日をコピー</button>
+          <span id="copyStatus" class="copy-status" aria-live="polite"></span>
+        </div>
         <div id="candidateList" class="candidate-list"></div>
       </section>
     </section>
@@ -83,6 +98,9 @@
     </section>
   </main>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
