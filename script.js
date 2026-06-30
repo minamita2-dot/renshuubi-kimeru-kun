@@ -665,10 +665,11 @@ function renderMemberList() {
     elements.modeHelp.innerHTML = '<span class="mode-help-primary">管理者モードです。</span><span class="mode-help-note">メンバー追加・削除、PIN再設定、共有URLコピー、全データリセットができます。</span>';
     elements.modeHelp.hidden = false;
   } else if (isMemberMode() && activeMember) {
-    elements.activeMemberBadge.textContent = `メンバーモード：${activeMember.name}`;
+    const safeMemberName = escapeHtml(activeMember.name);
+    elements.activeMemberBadge.innerHTML = `<span class="badge-mode">メンバーモード</span><span class="badge-name">${safeMemberName}</span>`;
     elements.activeMemberBadge.style.background = activeMember.color;
     elements.activeMemberBadge.style.color = getReadableTextColor(activeMember.color);
-    elements.modeHelp.textContent = `${activeMember.name}さんとして入力中です。自分の予定だけ変更できます。`;
+    elements.modeHelp.innerHTML = `<span class="mode-help-primary">${safeMemberName}さんとして入力中です。</span><span class="mode-help-note">自分の予定だけ変更できます。</span>`;
     elements.modeHelp.hidden = false;
   } else {
     elements.activeMemberBadge.textContent = "未選択";

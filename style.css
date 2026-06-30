@@ -176,6 +176,13 @@ input:focus-visible {
   letter-spacing: 0;
 }
 
+.app-kicker {
+  max-width: 100%;
+  font-size: clamp(0.58rem, 2.35vw, 0.78rem);
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
 h1,
 h2,
 p {
@@ -396,6 +403,22 @@ input:disabled {
 .active-member-badge.is-member-mode {
   color: #fff;
   background: #2e6b3f;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.badge-mode,
+.badge-name {
+  display: block;
+}
+
+.badge-mode {
+  white-space: nowrap;
+}
+
+.badge-name {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
 }
 
 .mode-help {
@@ -940,13 +963,19 @@ input:disabled {
 
   .day-number {
     width: auto;
-    min-width: 48px;
+    min-width: 72px;
     height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 0 10px;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .day-weekday {
     display: inline;
+    white-space: nowrap;
   }
 
   .slot-button {
@@ -964,4 +993,7 @@ input:disabled {
     box-shadow: 6px 6px 0 var(--ink);
   }
 
-  .
+  .mode-help-note {
+    white-space: normal;
+  }
+}
