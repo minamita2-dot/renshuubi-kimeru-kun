@@ -1,0 +1,77 @@
+/* 入室方法選択画面の通常利用向けレイアウト調整
+   メンバー登録済みのときだけ、メンバー選択を主役にして管理者ログインを下段に控えめ表示します。 */
+
+.role-panel:has(.role-member-list .role-member-button) {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.role-panel:has(.role-member-list .role-member-button) > .kicker,
+.role-panel:has(.role-member-list .role-member-button) > #roleTitle,
+.role-panel:has(.role-member-list .role-member-button) > .login-copy {
+  display: none;
+}
+
+.role-panel:has(.role-member-list .role-member-button) .role-member-section {
+  order: 1;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.role-panel:has(.role-member-list .role-member-button) .role-member-section h2 {
+  font-size: clamp(1.45rem, 5vw, 2rem);
+  line-height: 1.25;
+}
+
+.role-panel:has(.role-member-list .role-member-button) .admin-login-form {
+  order: 2;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 2px dashed var(--line);
+  gap: 7px;
+}
+
+.role-panel:has(.role-member-list .role-member-button) .admin-login-form h2 {
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.role-panel:has(.role-member-list .role-member-button) .admin-login-form label {
+  color: #666;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.role-panel:has(.role-member-list .role-member-button) .admin-login-form input {
+  min-height: 40px;
+  padding: 8px 10px;
+  border-width: 2px;
+  font-size: 0.9rem;
+}
+
+.role-panel:has(.role-member-list .role-member-button) .admin-login-form button {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.role-panel:has(.role-member-list .role-member-button) .admin-login-form .error-message {
+  font-size: 0.82rem;
+}
+
+@media (max-width: 720px) {
+  .role-panel:has(.role-member-list .role-member-button) {
+    padding: 26px;
+  }
+
+  .role-panel:has(.role-member-list .role-member-button) .role-member-section h2 {
+    font-size: clamp(1.35rem, 6.4vw, 1.8rem);
+  }
+
+  .role-panel:has(.role-member-list .role-member-button) .admin-login-form {
+    margin-top: 20px;
+  }
+}
