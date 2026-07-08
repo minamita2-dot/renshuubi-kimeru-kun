@@ -1,0 +1,66 @@
+/* ログイン画面タイトル専用の2段ロゴ風デザイン */
+
+.login-logo-title {
+  display: inline-grid;
+  gap: 0;
+  margin: 0 0 24px;
+  color: var(--ink);
+  line-height: 0.82;
+  letter-spacing: -0.055em;
+  transform: skew(-6deg) rotate(-1.5deg);
+  transform-origin: left center;
+}
+
+.login-logo-title span {
+  display: block;
+  font-weight: 950;
+}
+
+.login-logo-main {
+  font-size: clamp(2.9rem, 14.5vw, 5.3rem);
+}
+
+.login-logo-sub {
+  position: relative;
+  font-size: clamp(3.35rem, 16.5vw, 6.1rem);
+}
+
+.login-logo-sub::after {
+  content: "";
+  position: absolute;
+  left: 0.12em;
+  right: 0.05em;
+  bottom: -0.12em;
+  height: 0.1em;
+  background: var(--ink);
+  transform: skewX(-24deg) rotate(-2deg);
+  transform-origin: left center;
+}
+
+@media (max-width: 720px) {
+  .login-logo-title {
+    margin-bottom: 22px;
+  }
+
+  .login-logo-main {
+    font-size: clamp(2.75rem, 15.2vw, 4.4rem);
+  }
+
+  .login-logo-sub {
+    font-size: clamp(3.1rem, 17.2vw, 5rem);
+  }
+}
+
+@media (max-width: 390px) {
+  .login-logo-title {
+    letter-spacing: -0.065em;
+  }
+
+  .login-logo-main {
+    font-size: clamp(2.55rem, 14.6vw, 3.7rem);
+  }
+
+  .login-logo-sub {
+    font-size: clamp(2.95rem, 16vw, 4.2rem);
+  }
+}
