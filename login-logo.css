@@ -1,13 +1,17 @@
 /* ログイン画面の画像ロゴ表示 */
 
 .login-brand {
-  margin: 0 0 18px;
+  margin: 0 0 6px;
 }
 
 .login-brand-image {
   display: block;
   width: min(100%, 360px);
   height: auto;
+}
+
+.login-copy {
+  margin-top: 0;
 }
 
 .visually-hidden {
