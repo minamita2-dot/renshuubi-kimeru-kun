@@ -1,0 +1,18 @@
+{
+  "name": "練習日きめるくん",
+  "short_name": "練習日",
+  "background_color": "#f3f3f1",
+  "theme_color": "#f3f3f1",
+  "icons": [
+    {
+      "src": "assets/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
